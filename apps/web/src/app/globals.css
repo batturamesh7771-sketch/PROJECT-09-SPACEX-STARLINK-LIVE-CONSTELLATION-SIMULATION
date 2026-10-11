@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-deep-navy text-star-white m-0 p-0 overflow-hidden font-sans;
+  }
+}

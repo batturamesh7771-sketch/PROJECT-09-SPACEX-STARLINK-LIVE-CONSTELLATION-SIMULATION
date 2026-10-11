@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "COSMOS | Real-Time 3D Space & Satellite Tracker",
+  "version": "1.0.0",
+  "description": "Track HawkEye 360, Starlink, ISS, Space Weather, Asteroids, Deep Space & 10,000+ API Key Vault in a 3D WebGL Popup and Side Panel.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "sidePanel",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://celestrak.org/*",
+    "https://services.swpc.noaa.gov/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "COSMOS Space Telemetry",
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

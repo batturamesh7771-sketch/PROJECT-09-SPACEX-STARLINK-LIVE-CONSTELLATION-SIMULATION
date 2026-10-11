@@ -1,0 +1,81 @@
+import type { StellarAndTransientObject } from '@cosmos/types';
+
+/**
+ * Returns ESA Gaia DR3 nearby stellar systems, millisecond pulsars, and IAU Transient Name Server (TNS) supernovae
+ */
+export async function fetchStellarAndTransients(): Promise<StellarAndTransientObject[]> {
+  return [
+    {
+      id: 'GAIA-DR3-5853498713190525696',
+      name: 'Proxima Centauri (Alpha Cen C)',
+      category: 'GAIA_NEARBY_STAR',
+      raDeg: 217.4289,
+      decDeg: -62.6795,
+      distanceLy: 4.246,
+      redshift: null,
+      apparentMag: 11.13,
+      spectralOrTransientType: 'M5.5Ve Flare Star',
+      notes: 'Closest star to the Solar System; hosts Proxima b (HZ) and Proxima d.',
+    },
+    {
+      id: 'GAIA-DR3-4472832130942575872',
+      name: "Barnard's Star (GJ 699)",
+      category: 'GAIA_NEARBY_STAR',
+      raDeg: 269.4521,
+      decDeg: 4.6934,
+      distanceLy: 5.963,
+      redshift: null,
+      apparentMag: 9.51,
+      spectralOrTransientType: 'M4.0Ve Red Dwarf',
+      notes: 'Highest known proper motion (10.3 arcsec/yr) relative to the Sun.',
+    },
+    {
+      id: 'GAIA-DR3-2635476908753563008',
+      name: 'TRAPPIST-1 (2MASS J23062928-0502285)',
+      category: 'GAIA_NEARBY_STAR',
+      raDeg: 346.6223,
+      decDeg: -5.0414,
+      distanceLy: 40.66,
+      redshift: null,
+      apparentMag: 18.8,
+      spectralOrTransientType: 'M8V Ultra-Cool Dwarf',
+      notes: 'Hosts 7 resonant terrestrial planets (b, c, d, e, f, g, h).',
+    },
+    {
+      id: 'TNS-SN-2023ixf',
+      name: 'SN 2023ixf (Pinwheel Galaxy M101)',
+      category: 'SUPERNOVA_TRANSIENT',
+      raDeg: 210.9107,
+      decDeg: 54.3117,
+      distanceLy: 21000000,
+      redshift: 0.0008,
+      apparentMag: 10.9,
+      spectralOrTransientType: 'Type II Core-Collapse Supernova',
+      notes: 'Closest Type II supernova observed in the past decade in Messier 101.',
+    },
+    {
+      id: 'TNS-SN-2026cma',
+      name: 'SN 2026cma (Virgo Cluster)',
+      category: 'SUPERNOVA_TRANSIENT',
+      raDeg: 187.7059,
+      decDeg: 12.3911,
+      distanceLy: 53800000,
+      redshift: 0.0042,
+      apparentMag: 12.4,
+      spectralOrTransientType: 'Type Ia Thermonuclear Supernova',
+      notes: 'Standard candle transient detected by ZTF and confirmed on IAU TNS.',
+    },
+    {
+      id: 'PSR-B0531+21',
+      name: 'PSR B0531+21 (Crab Nebula Pulsar)',
+      category: 'PULSAR',
+      raDeg: 83.6331,
+      decDeg: 22.0145,
+      distanceLy: 6500,
+      redshift: null,
+      apparentMag: 16.5,
+      spectralOrTransientType: '33 ms Young Rotation-Powered Pulsar',
+      notes: 'Central neutron star remnant of SN 1054 emitting from radio to TeV gamma rays.',
+    },
+  ];
+}
