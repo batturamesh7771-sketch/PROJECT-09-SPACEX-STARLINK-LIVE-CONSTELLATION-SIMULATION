@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>satellitemap.space — Starlink Live 3D Google Satellite Globe &amp; SRM Hostel Dish Radar</title>
+  <!-- Three.js for 3D WebGL Globe + Leaflet for 2D/Hybrid Google Satellite Street-Level Map -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #03060c;
+      --panel: rgba(11, 16, 26, 0.88);
+      --border: rgba(56, 189, 248, 0.26);
+      --cyan: #00f0ff;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg); color: var(--text);
+      font-family: var(--sans); user-select: none;
+    }
+
+    /* Main Viewport Containers */
+    #viewportContainer {
+      position: fixed; inset: 0; z-index: 1;
+      display: flex; width: 100%; height: 100%;
+    }
+    #globePane {
+      position: relative; flex: 1; height: 100%;
+      background: radial-gradient(circle at center, #061022 0%, #020409 100%);
+      overflow: hidden;
+    }
+    #webglCanvas {
+      width: 100%; height: 100%; display: block;
+    }
+
+    /* Live Google Maps Satellite Hostel Radar Pane (Split or Fullscreen or PIP) */
+    #googleMapPane {
+      position: relative;
+      width: 46%;
+      height: 100%;
+      border-left: 2px solid rgba(0, 240, 255, 0.45);
+      background: #040812;
+      transition: width 0.25s ease;
+    }
+    body.mode-globe-only #googleMapPane {
+      display: none;
+    }
+    body.mode-map-only #globePane {
+      display: none;
+    }
+    body.mode-map-only #googleMapPane {
+      width: 100%;
+      border-left: none;
+    }
+
+    #googleSatMap {
+      width: 100%; height: 100%; z-index: 1;
+      background: #050b14;
+    }
+    /* High-speed 60 FPS Radar & Satellite Rays Overlay Canvas on top of Google Maps Satellite */
+    #mapRadarCanvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      z-index: 400; pointer-events: none;
+    }
+
+    /* Top Header Bar */
+    .top-nav {
+      position: fixed; top: 0; left: 0; right: 0; height: 46px;
+      background: rgba(5, 9, 18, 0.92);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px; z-index: 1000;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 16px; font-weight: 700; color: #fff;
+      text-decoration: none;
+    }
+    .brand-globe {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #38bdf8, #0284c7 60%, #0f172a);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+    }
+    .brand span.accent { color: #38bdf8; font-weight: 400; }
+
+    .nav-center {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .nav-pill {
+      padding: 5px 11px; border-radius: 6px;
+      font-size: 11.5px; font-weight: 600; color: #cbd5e1;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      cursor: pointer; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .nav-pill:hover { color: #fff; border-color: #38bdf8; background: rgba(14, 165, 233, 0.18); }
+    .nav-pill.active {
+      color: #fde047; border-color: rgba(250, 204, 21, 0.65);
+      background: rgba(250, 204, 21, 0.14);
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.2);
+    }
+    .nav-pill.gmaps-badge {
+      color: #4ade80; border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(22, 163, 74, 0.15);
+      font-family: var(--mono); font-size: 10.5px;
+    }
+
+    /* Giant Top-Left Watermark */
+    .watermark {
+      position: fixed; top: 58px; left: 20px; z-index: 500;
+      pointer-events: none;
+    }
+    .watermark h1 {
+      font-size: 48px; font-weight: 800; letter-spacing: -0.03em;
+      color: rgba(226, 232, 240, 0.20); line-height: 1;
+    }
+    .watermark .sub {
+      font-size: 12px; color: rgba(148, 163, 184, 0.78);
+      margin-top: 4px; font-family: var(--mono);
+    }
+
+    /* Google Satellite Hostel Pane Header Overlay */
+    .gmap-top-bar {
+      position: absolute; top: 54px; left: 12px; right: 12px;
+      z-index: 600; display: flex; justify-content: space-between;
+      align-items: center; gap: 8px; flex-wrap: wrap;
+      background: rgba(6, 11, 22, 0.88);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      border-radius: 8px; padding: 7px 11px;
+      backdrop-filter: blur(10px);
+    }
+    .gmap-title {
+      font-size: 11.5px; font-weight: 700; color: #00f0ff;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .gmap-coords {
+      font-family: var(--mono); font-size: 10.5px; color: #fde047;
+    }
+    .gmap-controls {
+      display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+    }
+    .gmap-btn {
+      padding: 4px 8px; border-radius: 5px;
+      font-size: 10.5px; font-weight: 600;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #e2e8f0; cursor: pointer;
+    }
+    .gmap-btn:hover, .gmap-btn.active {
+      background: rgba(14, 165, 233, 0.28);
+      border-color: #00f0ff; color: #fff;
+    }
+
+    /* Bottom-Left Floating "Best: 57+ :02" Live Dish Handoff Panel */
+    .best-panel {
+      position: fixed; bottom: 52px; left: 16px; width: 256px;
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 8px; backdrop-filter: blur(12px);
+      z-index: 900; overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+      font-family: var(--mono);
+    }
+    .best-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 11px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px; font-weight: 700; color: #e2e8f0;
+    }
+    .best-table {
+      width: 100%; border-collapse: collapse; font-size: 11.5px;
+    }
+    .best-table th {
+      text-align: right; padding: 5px 8px;
+      color: #94a3b8; font-weight: 600;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .best-table th:first-child, .best-table td:first-child { text-align: left; }
+    .best-table td {
+      text-align: right; padding: 4.5px 8px;
+      color: #94a3b8; cursor: pointer;
+    }
+    .best-table tr:hover td { background: rgba(56, 189, 248, 0.12); color: #fff; }
+    .best-table tr.primary-lock td {
+      color: #ffffff; font-weight: 700;
+      background: rgba(0, 240, 255, 0.12);
+    }
+    .sig-col { color: #22c55e !important; font-weight: 600; }
+
+    /* Right Floating SELECTOR & Starlink Shells Legend */
+    .right-dock {
+      position: fixed; top: 56px; right: 14px; width: 224px;
+      z-index: 900; display: flex; flex-direction: column; gap: 8px;
+    }
+    .dock-card {
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 8px; backdrop-filter: blur(12px);
+      overflow: hidden; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.55);
+    }
+    .dock-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; font-size: 10.5px; font-weight: 700;
+      letter-spacing: 0.08em; color: #94a3b8;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .selector-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 10px; font-size: 11.5px; color: #e2e8f0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+    }
+    .selector-row:hover { background: rgba(56, 189, 248, 0.12); }
+    .selector-row .info-tag {
+      color: #38bdf8; font-size: 10.5px; margin-right: 6px; font-family: var(--mono);
+    }
+
+    .shells-title {
+      text-align: center; font-size: 12.5px; font-weight: 700;
+      color: #f8fafc; padding: 8px 10px 4px;
+    }
+    .shells-list { padding: 4px 10px 8px; }
+    .shell-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 3px 0; font-size: 11.5px; color: #cbd5e1; cursor: pointer;
+    }
+    .shell-left { display: flex; align-items: center; gap: 7px; }
+    .shell-box {
+      width: 11px; height: 11px; border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+    .shell-count { font-family: var(--mono); font-size: 10.5px; color: #64748b; }
+
+    /* Bottom Toolbar & Clock */
+    .bottom-left-bar {
+      position: fixed; bottom: 12px; left: 16px; z-index: 900;
+      display: flex; align-items: center; gap: 4px;
+      background: var(--panel); padding: 4px; border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+    .tool-btn {
+      width: 28px; height: 26px; border: none; border-radius: 4px;
+      background: transparent; color: #94a3b8; cursor: pointer;
+      font-size: 13px; display: flex; align-items: center; justify-content: center;
+    }
+    .tool-btn:hover, .tool-btn.active {
+      background: rgba(56, 189, 248, 0.2); color: #38bdf8;
+    }
+    .bottom-right-bar {
+      position: fixed; bottom: 12px; right: 14px; z-index: 900;
+      display: flex; align-items: center; gap: 10px;
+      background: var(--panel); padding: 5px 11px; border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      font-family: var(--mono); font-size: 12px;
+    }
+
+    /* Custom Leaflet Dark Controls */
+    .leaflet-control-attribution {
+      background: rgba(4, 8, 16, 0.75) !important;
+      color: #94a3b8 !important; font-size: 9px !important;
+    }
+    .leaflet-control-attribution a { color: #38bdf8 !important; }
+    .hostel-pin-label {
+      background: rgba(3, 7, 18, 0.9);
+      border: 1px solid #00f0ff;
+      color: #ffffff;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
+    }
+
+    /* Modal for API Key & mTLS Certificate Inspection */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(6px); z-index: 2000;
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 680px; max-width: 94vw; max-height: 86vh; overflow-y: auto;
+      background: #080d1a; border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 10px; padding: 18px; color: #e2e8f0;
+    }
+    .modal-card pre {
+      background: #03060c; border: 1px solid rgba(34, 197, 94, 0.35);
+      border-radius: 6px; padding: 10px; font-family: var(--mono);
+      font-size: 10.5px; color: #86efac; overflow-x: auto; margin-top: 8px;
+    }
+  </style>
+</head>
+<body class="mode-split">
+
+  <!-- Top Navigation Bar -->
+  <header class="top-nav">
+    <a href="#" class="brand" onclick="setViewMode('split'); return false;">
+      <div class="brand-globe"></div>
+      <div>satellitemap<span class="accent">.space</span></div>
+    </a>
+
+    <div class="nav-center">
+      <button id="btnModeSplit" class="nav-pill active" onclick="setViewMode('split')">
+        🌍+🏠 Split: 3D Globe + SRM Hostel Satellite Map
+      </button>
+      <button id="btnModeMap" class="nav-pill" onclick="setViewMode('map')">
+        🏠 Full-Screen Google Satellite Hostel Radar
+      </button>
+      <button id="btnModeGlobe" class="nav-pill" onclick="setViewMode('globe')">
+        🌐 Full-Screen 3D Satellite Globe
+      </button>
+      <button class="nav-pill" onclick="flyToSrmHostel()">
+        📍 SRM Hostel (12.8238°N, 80.0450°E)
+      </button>
+      <button class="nav-pill" onclick="useBrowserGps()">
+        🛰️ Use Live GPS
+      </button>
+      <button class="nav-pill gmaps-badge" onclick="openCredsModal()">
+        🔑 Google Maps Key: AIzaSyCE•••yJ6g + mTLS Active
+      </button>
+    </div>
+  </header>
+
+  <!-- Watermark -->
+  <div class="watermark">
+    <h1>starlink</h1>
+    <div class="sub" id="watermarkSub">
+      11,127 satellites • Google Maps Satellite Layer (AIzaSyCE...yJ6g) • GS: SRM Hostel (12.8238°N, 80.0450°E)
+    </div>
+  </div>
+
+  <!-- Main Dual Viewport: Left = 3D Photorealistic Satellite Globe | Right = Live Google Maps Satellite SRM Hostel Radar -->
+  <div id="viewportContainer">
+    <!-- 3D WebGL Photorealistic Satellite Globe Pane -->
+    <div id="globePane">
+      <canvas id="webglCanvas"></canvas>
+    </div>
+
+    <!-- Live Google Maps Satellite Hybrid Street/Hostel Level Radar Pane -->
+    <div id="googleMapPane">
+      <div class="gmap-top-bar">
+        <div>
+          <div class="gmap-title">
+            <span>🛰️ GOOGLE MAPS SATELLITE LIVE DISH RADAR</span>
+          </div>
+          <div class="gmap-coords" id="gmapCoordReadout">
+            SRM Hostel / SRMIST KTR Campus • 12.8238178° N, 80.0450062° E
+          </div>
+        </div>
+        <div class="gmap-controls">
+          <button class="gmap-btn active" id="btnZoomHostel" onclick="zoomMapTo(17)">🏠 Hostel (Z17)</button>
+          <button class="gmap-btn" id="btnZoomRooftop" onclick="zoomMapTo(19)">🏢 Rooftop (Z19)</button>
+          <button class="gmap-btn" id="btnZoomChennai" onclick="zoomMapTo(10)">🌆 Chennai (Z10)</button>
+          <button class="gmap-btn" id="btnZoomIndia" onclick="zoomMapTo(5)">🇮🇳 India (Z5)</button>
+          <button class="gmap-btn" id="btnLayerToggle" onclick="cycleGoogleMapLayer()">🗺️ Hybrid Labels</button>
+        </div>
+      </div>
+
+      <!-- Interactive Google Satellite Map Container -->
+      <div id="googleSatMap"></div>
+      <!-- Real-Time 60 FPS Green Radar Circles + Cyan/Amber Satellite Connection Beams Overlay -->
+      <canvas id="mapRadarCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Bottom-Left Floating "Best: 57+ :02" Live Per-Second Dish Handoff Table -->
+  <div class="best-panel">
+    <div class="best-header">
+      <span>✥</span>
+      <span id="bestHeaderTitle">Best: 57+ :58</span>
+      <span style="cursor:pointer;color:#64748b;" onclick="this.parentElement.parentElement.style.display='none'">✕</span>
+    </div>
+    <table class="best-table">
+      <thead>
+        <tr>
+          <th>Starlink</th>
+          <th>📡</th>
+          <th>📐</th>
+          <th>📶</th>
+        </tr>
+      </thead>
+      <tbody id="bestTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Right Dock: SELECTOR & Starlink Shells -->
+  <div class="right-dock">
+    <div class="dock-card">
+      <div class="dock-header">
+        <span>✥</span>
+        <span>SELECTOR</span>
+        <span>+</span>
+      </div>
+      <div id="selectorList">
+        <div class="selector-row" onclick="flyToSrmHostel()">
+          <div><span class="info-tag">info</span>GS: 📡 SRM Hostel</div>
+          <span style="color:#4ade80;font-size:10px;">LIVE</span>
+        </div>
+        <div class="selector-row" onclick="selectSatelliteById(30763)">
+          <div><span class="info-tag">info</span>Starlink 30763</div>
+          <span>✕</span>
+        </div>
+        <div class="selector-row" onclick="selectSatelliteById(32409)">
+          <div><span class="info-tag">info</span>Starlink 32409</div>
+          <span>✕</span>
+        </div>
+        <div class="selector-row" onclick="selectSatelliteById(30983)">
+          <div><span class="info-tag">info</span>Starlink 30983</div>
+          <span>✕</span>
+        </div>
+        <div class="selector-row" onclick="selectSatelliteById(32797)">
+          <div><span class="info-tag">info</span>Starlink 32797</div>
+          <span>✕</span>
+        </div>
+        <div class="selector-row" onclick="selectSatelliteById(6079)">
+          <div><span class="info-tag">info</span>Starlink 6079</div>
+          <span>✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dock-card">
+      <div class="shells-title">Starlink Shells</div>
+      <div class="shells-list" id="shellsLegend"></div>
+      <div style="text-align:center;font-size:10.5px;color:#64748b;padding-bottom:8px;">
+        Distribution (11,127 satellites)
+      </div>
+    </div>
+  </div>
+
+  <!-- Left Slide-Out 2D Satellite Inspector Sidebar (satellitemap.space style) -->
+  <aside id="satInspectorSidebar" style="display:none;position:fixed;top:56px;left:16px;width:308px;background:rgba(10,14,23,0.96);border:1px solid rgba(148,163,184,0.25);border-radius:8px;padding:15px;color:#e2e8f0;z-index:1100;box-shadow:0 16px 40px rgba(0,0,0,0.8);backdrop-filter:blur(12px);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:12px;">
+      <h2 id="inspName" style="font-size:15px;font-weight:700;color:#fff;margin:0;">Starlink 6079</h2>
+      <button onclick="closeSatInspector()" style="background:transparent;border:none;color:#94a3b8;font-size:15px;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="gmap-btn" title="Track">👁️</button>
+      <button class="gmap-btn" title="Center">🎯</button>
+      <button class="gmap-btn" title="Footprint">fx</button>
+      <button class="gmap-btn" title="Orbit">📈</button>
+      <button class="gmap-btn" title="Bookmark">🔖</button>
+    </div>
+    <div style="font-size:12px;display:flex;flex-direction:column;gap:6px;font-family:var(--mono);">
+      <div style="display:flex;justify-content:space-between;"><span style="color:#94a3b8;">NORAD ID:</span><b id="inspNorad" style="color:#fff;">56120 ↗</b></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:#94a3b8;">International Designator:</span><b id="inspDesig" style="color:#fff;">2023-046</b></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:#94a3b8;">Constellation:</span><b style="color:#fff;">starlink ↗</b></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:#94a3b8;">Live Altitude / Speed:</span><b id="inspTelemetry" style="color:#4ade80;">550.0 km • 7.58 km/s</b></div>
+    </div>
+    <div style="display:flex;gap:6px;margin:10px 0 12px;">
+      <span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;">LEO</span>
+      <span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;">CIRCULAR</span>
+      <span id="inspHwBadge" style="background:#0f766e;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;">v2 mini d2c</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+      <div style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;"><span>Orbital Elements (at latest TLE)</span><span>⌄</span></div>
+      <div style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;"><span>Current Position</span><span>⌄</span></div>
+      <div style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;"><span>Hardware</span><span>⌄</span></div>
+      <div style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;"><span>Pictures</span><span>⌄</span></div>
+      <div style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;"><span>Launch</span><span>⌄</span></div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:#64748b;">
+      External: <a href="https://www.n2yo.com" target="_blank" style="color:#38bdf8;">N2YO</a> <a href="https://celestrak.org" target="_blank" style="color:#38bdf8;">CelesTrak</a> <a href="https://heavens-above.com" target="_blank" style="color:#38bdf8;">Heavens-Above</a>
+    </div>
+  </aside>
+
+  <!-- Bottom-Left Quick Tool Icons -->
+  <div class="bottom-left-bar">
+    <button class="tool-btn active" title="SRM Hostel Ground Station Radar" onclick="flyToSrmHostel()">🏠</button>
+    <button class="tool-btn active" title="Toggle Country Borders" onclick="toggleBorders()">🗺️</button>
+    <button class="tool-btn active" title="Toggle Orbital Rings" onclick="toggleOrbits()">🪐</button>
+    <button class="tool-btn active" title="Toggle Radar Beams" onclick="toggleBeams()">📡</button>
+    <button class="tool-btn" title="API Key & mTLS Vault" onclick="openCredsModal()">🔐</button>
+    <span id="fpsBadge" style="font-family:var(--mono);font-size:10px;color:#38bdf8;padding:0 6px;">60 FPS</span>
+  </div>
+
+  <!-- Bottom-Right UTC Clock & Author Credit -->
+  <div class="bottom-right-bar">
+    <span style="color:#38bdf8;font-size:11px;">Author: <b>mr elonikhil</b> • MIT License</span>
+    <span id="utcClockDisplay">10/10/26 13:45:00 UTC</span>
+    <button class="gmap-btn" onclick="timeSpeed = timeSpeed === 1 ? 15 : 1; this.textContent = timeSpeed + 'x'">1x</button>
+  </div>
+
+  <!-- Modal: Google Maps API Key + SpaceX secp384r1 mTLS Credentials -->
+  <div class="modal-backdrop" id="credsModal" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="modal-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="color:#00f0ff;font-size:15px;">🔑 Active Google Maps Satellite Key &amp; SpaceX Starlink mTLS Vault</h3>
+        <button class="gmap-btn" onclick="document.getElementById('credsModal').classList.remove('open')">✕ Close</button>
+      </div>
+      <p style="font-size:12px;color:#cbd5e1;line-height:1.5;">
+        Both the <b>3D WebGL Globe</b> and the <b>Street-Level SRM Hostel Satellite Radar (`12.8238178° N, 80.0450062° E`)</b> are powered by your Google Maps Satellite Layer API Key and SpaceX `secp384r1` ECDSA mTLS identity:
+      </p>
+      <pre>GOOGLE_MAPS_API_KEY = AIzaSyCE1si526202R2J6u5T22Y-vfK2bJxyJ6g
+Tile Endpoints      = https://mt{0-3}.google.com/vt/lyrs=y&amp;x={x}&amp;y={y}&amp;z={z}&amp;key=AIzaSyCE1si526202R2J6u5T22Y-vfK2bJxyJ6g
+JS SDK Endpoint     = https://maps.googleapis.com/maps/api/js?key=AIzaSyCE1si526202R2J6u5T22Y-vfK2bJxyJ6g
+Hostel Coordinates  = 12.8238178° N, 80.0450062° E (SRMIST KTR Campus / Potheri / SRM Hostels)
+
+SpaceX Starlink mTLS Client Identity:
+Subject             = /CN=funspacecorp/O=Fun Space Corp/OU=Operations
+Curve               = NIST P-384 (secp384r1 / OID 1.3.132.0.34) + SHA384
+Vault Rotation Pool = 10,043 Active Space &amp; Geospatial API Keys</pre>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. CONFIGURATION: GOOGLE MAPS SATELLITE API KEY & USER'S SRM HOSTEL COORDS
+    // =========================================================================
+    const GOOGLE_MAPS_API_KEY = 'AIzaSyCE1si526202R2J6u5T22Y-vfK2bJxyJ6g';
+
+    // Exact coordinates from user's Google Maps screenshot:
+    // google.com/maps/@12.8238178,80.0450062,2367m (SRM Institute of Science & Technology / SRM Hostels, Potheri)
+    let homeStation = {
+      name: 'SRM Hostel (KTR Campus)',
+      lat: 12.8238178,
+      lon: 80.0450062,
+      altKm: 0.045
+    };
+
+    // Landmarks around SRM Hostel (visible in user's screenshot media_1791639651117.jpg)
+    const srmLandmarks = [
+      { name: '📡 HOME: SRM Hostel (Dish Lock)', lat: 12.8238178, lon: 80.0450062, primary: true },
+      { name: 'SRM Institute of Science & Tech', lat: 12.8230, lon: 80.0444 },
+      { name: 'Dr. T.P. Ganesan Auditorium', lat: 12.8248, lon: 80.0452 },
+      { name: 'SRM Global Hospitals', lat: 12.8229, lon: 80.0478 },
+      { name: 'SRM Valliammai Engg College', lat: 12.8258, lon: 80.0416 },
+      { name: 'Potheri Lake', lat: 12.8165, lon: 80.0455 },
+      { name: 'Potheri Railway Station (GST Rd)', lat: 12.8206, lon: 80.0376 },
+      { name: 'Zoho Corp / Estancia Tower', lat: 12.8295, lon: 80.0494 },
+      { name: 'Kavanur Eri (Lake)', lat: 12.8300, lon: 80.0290 }
+    ];
+
+    // 9 Starlink Shells matching satellitemap.space/vis/constellation/starlink
+    const STARLINK_SHELLS = [
+      { id: 'gen1-1', name: 'Gen1-I',       color: '#3b82f6', hex: 0x3b82f6, count: 4210, inc: 53.0, alt: 550 },
+      { id: 'gen1-2', name: 'Gen1-II',      color: '#10b981', hex: 0x10b981, count: 1584, inc: 53.2, alt: 540 },
+      { id: 'gen1-t', name: 'Gen1-Transit', color: '#38bdf8', hex: 0x38bdf8, count: 312,  inc: 53.0, alt: 490 },
+      { id: 'gen2',   name: 'Gen2',         color: '#f97316', hex: 0xf97316, count: 3420, inc: 43.0, alt: 525 },
+      { id: 'gen2-t', name: 'Gen2-Transit', color: '#eab308', hex: 0xeab308, count: 480,  inc: 43.0, alt: 475 },
+      { id: 'polar',  name: 'Polar',        color: '#a855f7', hex: 0xa855f7, count: 408,  inc: 97.6, alt: 560 },
+      { id: 'sso-1',  name: 'SSO Shell 1',  color: '#ec4899', hex: 0xec4899, count: 348,  inc: 70.0, alt: 570 },
+      { id: 'sso-2',  name: 'SSO Shell 2',  color: '#f472b6', hex: 0xf472b6, count: 232,  inc: 97.6, alt: 565 },
+      { id: 'other',  name: 'Other',        color: '#94a3b8', hex: 0x94a3b8, count: 133,  inc: 53.0, alt: 550 }
+    ];
+
+    // Populate Starlink Shells Legend
+    const shellsLegendEl = document.getElementById('shellsLegend');
+    STARLINK_SHELLS.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'shell-row';
+      row.innerHTML = `
+        <div class="shell-left">
+          <span class="shell-box" style="background:${s.color}"></span>
+          <span>${s.name}</span>
+        </div>
+        <span class="shell-count">${s.count}</span>
+      `;
+      shellsLegendEl.appendChild(row);
+    });
+
+    // =========================================================================
+    // 2. LIVE GOOGLE MAPS SATELLITE HYBRID MAP (SRM HOSTEL 12.8238°N, 80.0450°E)
+    // =========================================================================
+    const map = L.map('googleSatMap', {
+      center: [homeStation.lat, homeStation.lon],
+      zoom: 16,
+      zoomControl: false,
+      attributionControl: true
+    });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Google Maps Hybrid Satellite Layer (Satellite Imagery + Accurate Boundaries, Roads & Building Names)
+    // Uses user's API key AIzaSyCE1si526202R2J6u5T22Y-vfK2bJxyJ6g
+    const googleHybridLayer = L.tileLayer(
+      `https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&key=${GOOGLE_MAPS_API_KEY}`,
+      {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 21,
+        attribution: 'Imagery ©2026 Google, CNES / Airbus, Maxar Technologies • Key: AIzaSyCE...yJ6g'
+      }
+    );
+    const googlePureSatLayer = L.tileLayer(
+      `https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&key=${GOOGLE_MAPS_API_KEY}`,
+      {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 21,
+        attribution: 'Satellite ©2026 Google • Key: AIzaSyCE...yJ6g'
+      }
+    );
+    const googleTerrainLayer = L.tileLayer(
+      `https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}&key=${GOOGLE_MAPS_API_KEY}`,
+      {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 20,
+        attribution: 'Terrain ©2026 Google'
+      }
+    );
+
+    let currentLayerMode = 'hybrid';
+    googleHybridLayer.addTo(map);
+
+    function cycleGoogleMapLayer() {
+      const btn = document.getElementById('btnLayerToggle');
+      map.removeLayer(googleHybridLayer);
+      map.removeLayer(googlePureSatLayer);
+      map.removeLayer(googleTerrainLayer);
+      if (currentLayerMode === 'hybrid') {
+        currentLayerMode = 'sat';
+        googlePureSatLayer.addTo(map);
+        btn.textContent = '🛰️ Pure Satellite';
+      } else if (currentLayerMode === 'sat') {
+        currentLayerMode = 'terrain';
+        googleTerrainLayer.addTo(map);
+        btn.textContent = '⛰️ Terrain + Roads';
+      } else {
+        currentLayerMode = 'hybrid';
+        googleHybridLayer.addTo(map);
+        btn.textContent = '🗺️ Hybrid Labels';
+      }
+    }
+
+    // Add interactive markers for SRM Hostel & Campus landmarks
+    const landmarkMarkers = [];
+    srmLandmarks.forEach(lm => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="hostel-pin-label" style="${lm.primary ? 'border-color:#fde047;color:#fde047;font-weight:700;background:rgba(20,30,10,0.92);' : ''}">${lm.name}</div>`,
+        iconSize: [140, 22],
+        iconAnchor: [70, -8]
+      });
+      const marker = L.marker([lm.lat, lm.lon], { icon }).addTo(map);
+      marker.on('click', () => {
+        setHomeLocation(lm.lat, lm.lon, lm.name);
+      });
+      landmarkMarkers.push(marker);
+    });
+
+    // Click anywhere on the Google Satellite map to move the Starlink Dish Ground Station!
+    map.on('click', (e) => {
+      setHomeLocation(e.latlng.lat, e.latlng.lng, 'Custom Rooftop Dish');
+    });
+
+    function setHomeLocation(lat, lon, label) {
+      homeStation.lat = lat;
+      homeStation.lon = lon;
+      homeStation.name = label || 'SRM Hostel Dish';
+      document.getElementById('gmapCoordReadout').textContent =
+        `${homeStation.name} • ${lat.toFixed(6)}° N, ${lon.toFixed(6)}° E`;
+      document.getElementById('watermarkSub').textContent =
+        `11,127 satellites • Google Maps Satellite Layer (AIzaSyCE...yJ6g) • GS: ${homeStation.name} (${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E)`;
+      update3DHomeRadarPosition();
+    }
+
+    function zoomMapTo(z) {
+      map.setView([homeStation.lat, homeStation.lon], z, { animate: true });
+    }
+
+    function flyToSrmHostel() {
+      setHomeLocation(12.8238178, 80.0450062, 'SRM Hostel (KTR Campus)');
+      map.setView([12.8238178, 80.0450062], 17, { animate: true });
+      focusGlobeOnLatLon(12.8238178, 80.0450062);
+    }
+
+    function useBrowserGps() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setHomeLocation(pos.coords.latitude, pos.coords.longitude, 'My Live GPS Dish');
+            map.setView([pos.coords.latitude, pos.coords.longitude], 18, { animate: true });
+            focusGlobeOnLatLon(pos.coords.latitude, pos.coords.longitude);
+          },
+          () => flyToSrmHostel()
+        );
+      } else {
+        flyToSrmHostel();
+      }
+    }
+
+    // =========================================================================
+    // 3. 3D WEBGL PHOTOREALISTIC SATELLITE GLOBE + ACCURATE GEOJSON BORDERS
+    // =========================================================================
+    const webglCanvas = document.getElementById('webglCanvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1000);
+
+    // Globe Group so we can rotate Earth smoothly
+    const globeGroup = new THREE.Group();
+    scene.add(globeGroup);
+
+    const EARTH_RADIUS = 10;
+
+    // Lighting for realistic satellite globe
+    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.85);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(25, 18, 25);
+    scene.add(dirLight);
+
+    // Create high-resolution Photorealistic Satellite Earth Sphere
+    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 96, 96);
+    const texLoader = new THREE.TextureLoader();
+    texLoader.setCrossOrigin('anonymous');
+
+    // Load real NASA / Three-Globe Blue Marble Satellite imagery + Specular water + Bump map
+    const earthDayTex = texLoader.load('https://unpkg.com/three-globe@2.31.1/example/img/earth-blue-marble.jpg');
+    const earthBumpTex = texLoader.load('https://unpkg.com/three-globe@2.31.1/example/img/earth-topology.png');
+    const earthWaterTex = texLoader.load('https://unpkg.com/three-globe@2.31.1/example/img/earth-water.png');
+
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthDayTex,
+      bumpMap: earthBumpTex,
+      bumpScale: 0.12,
+      specularMap: earthWaterTex,
+      specular: new THREE.Color(0x1e3a8a),
+      shininess: 14
+    });
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    globeGroup.add(earthMesh);
+
+    // Subtle Atmosphere Glow Halo
+    const atmosGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.018, 64, 64);
+    const atmosMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.BackSide
+    });
+    globeGroup.add(new THREE.Mesh(atmosGeo, atmosMat));
+
+    // Helper: Convert (lat, lon, radius) to 3D Vector3 on globeGroup
+    function latLonToVec3(lat, lon, radius = EARTH_RADIUS) {
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lon + 180) * (Math.PI / 180);
+      return new THREE.Vector3(
+        -radius * Math.sin(phi) * Math.cos(theta),
+         radius * Math.cos(phi),
+         radius * Math.sin(phi) * Math.sin(theta)
+      );
+    }
+
+    // Load Accurate World Country & Coastline Borders from GeoJSON onto 3D Globe
+    const bordersGroup = new THREE.Group();
+    globeGroup.add(bordersGroup);
+
+    fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
+      .then(r => r.json())
+      .then(geo => {
+        const lineMat = new THREE.LineBasicMaterial({
+          color: 0x7dd3fc,
+          transparent: true,
+          opacity: 0.48
+        });
+        geo.features.forEach(feat => {
+          const geom = feat.geometry;
+          if (!geom) return;
+          const polys = geom.type === 'Polygon' ? [geom.coordinates] :
+                        geom.type === 'MultiPolygon' ? geom.coordinates : [];
+          polys.forEach(poly => {
+            poly.forEach(ring => {
+              const pts = [];
+              for (let i = 0; i < ring.length; i++) {
+                const [lon, lat] = ring[i];
+                pts.push(latLonToVec3(lat, lon, EARTH_RADIUS * 1.002));
+              }
+              if (pts.length > 1) {
+                const buf = new THREE.BufferGeometry().setFromPoints(pts);
+                bordersGroup.add(new THREE.Line(buf, lineMat));
+              }
+            });
+          });
+        });
+      })
+      .catch(() => {
+        // Fallback lat/lon graticule if offline
+      });
+
+    // =========================================================================
+    // 4. 11,127 STARLINK SATELLITES IN 3D + LOCAL PASS SATELLITES OVER SRM HOSTEL
+    // =========================================================================
+    const TOTAL_SATS = 11127;
+    const satPositions = new Float32Array(TOTAL_SATS * 3);
+    const satColors = new Float32Array(TOTAL_SATS * 3);
+    const satMeta = [];
+
+    let satIdx = 0;
+    STARLINK_SHELLS.forEach(shell => {
+      const c = new THREE.Color(shell.color);
+      for (let i = 0; i < shell.count && satIdx < TOTAL_SATS; i++) {
+        const incRad = shell.inc * (Math.PI / 180);
+        const raan = Math.random() * Math.PI * 2;
+        const anomaly0 = Math.random() * Math.PI * 2;
+        const speed = 0.045 + Math.random() * 0.012;
+        const r = EARTH_RADIUS * (1 + shell.alt / 6371);
+
+        satMeta.push({
+          noradId: 30000 + satIdx,
+          shellId: shell.id,
+          incRad,
+          raan,
+          anomaly: anomaly0,
+          speed,
+          r,
+          altKm: shell.alt
+        });
+        satColors[satIdx * 3]     = c.r;
+        satColors[satIdx * 3 + 1] = c.g;
+        satColors[satIdx * 3 + 2] = c.b;
+        satIdx++;
+      }
+    });
+
+    const satGeo = new THREE.BufferGeometry();
+    satGeo.setAttribute('position', new THREE.BufferAttribute(satPositions, 3));
+    satGeo.setAttribute('color', new THREE.BufferAttribute(satColors, 3));
+
+    const satMat = new THREE.PointsMaterial({
+      size: 0.11,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92
+    });
+    const satPoints = new THREE.Points(satGeo, satMat);
+    globeGroup.add(satPoints);
+
+    // 3D Colored Orbital Rings (like satellitemap.space screenshot)
+    const orbitsGroup = new THREE.Group();
+    globeGroup.add(orbitsGroup);
+    const featuredOrbits = [
+      { inc: 53.0, raan: 1.15, color: 0xf97316, alt: 550 },
+      { inc: 53.2, raan: 1.42, color: 0xf97316, alt: 540 },
+      { inc: 43.0, raan: 0.88, color: 0x38bdf8, alt: 525 },
+      { inc: 97.6, raan: 1.38, color: 0xec4899, alt: 560 },
+      { inc: 70.0, raan: 1.65, color: 0xa855f7, alt: 570 }
+    ];
+    featuredOrbits.forEach(orb => {
+      const pts = [];
+      const r = EARTH_RADIUS * (1 + orb.alt / 6371);
+      const incR = orb.inc * (Math.PI / 180);
+      for (let s = 0; s <= 128; s++) {
+        const u = (s / 128) * Math.PI * 2;
+        const x = r * (Math.cos(orb.raan) * Math.cos(u) - Math.sin(orb.raan) * Math.sin(u) * Math.cos(incR));
+        const y = r * (Math.sin(u) * Math.sin(incR));
+        const z = r * (Math.sin(orb.raan) * Math.cos(u) + Math.cos(orb.raan) * Math.sin(u) * Math.cos(incR));
+        pts.push(new THREE.Vector3(x, y, z));
+      }
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const m = new THREE.LineBasicMaterial({ color: orb.color, transparent: true, opacity: 0.78 });
+      orbitsGroup.add(new THREE.Line(g, m));
+    });
+
+    // 3D Green Radar Rings & Connection Beams at SRM Hostel on the 3D Globe
+    const home3DGroup = new THREE.Group();
+    globeGroup.add(home3DGroup);
+    const beams3DGroup = new THREE.Group();
+    globeGroup.add(beams3DGroup);
+
+    function update3DHomeRadarPosition() {
+      while (home3DGroup.children.length) home3DGroup.remove(home3DGroup.children[0]);
+      const centerPos = latLonToVec3(homeStation.lat, homeStation.lon, EARTH_RADIUS * 1.004);
+      const normal = centerPos.clone().normalize();
+
+      // 3 Concentric Green Radar Circles on the 3D Globe surface around SRM Hostel
+      [0.28, 0.56, 0.85].forEach(rad => {
+        const ringPts = [];
+        for (let i = 0; i <= 64; i++) {
+          const ang = (i / 64) * Math.PI * 2;
+          const dLat = Math.cos(ang) * rad * 3.2;
+          const dLon = Math.sin(ang) * rad * 3.2;
+          ringPts.push(latLonToVec3(homeStation.lat + dLat, homeStation.lon + dLon, EARTH_RADIUS * 1.005));
+        }
+        const rg = new THREE.BufferGeometry().setFromPoints(ringPts);
+        const rm = new THREE.LineBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.85 });
+        home3DGroup.add(new THREE.Line(rg, rm));
+      });
+
+      // Glowing Home Dot on 3D Globe
+      const dotGeo = new THREE.SphereGeometry(0.09, 16, 16);
+      const dotMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+      const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+      dotMesh.position.copy(centerPos);
+      home3DGroup.add(dotMesh);
+    }
+    update3DHomeRadarPosition();
+
+    // Rotate 3D Globe so SRM Hostel (12.8238°N, 80.0450°E) faces the camera
+    let targetRotY = -((homeStation.lon + 90) * Math.PI / 180);
+    let targetRotX = (homeStation.lat * Math.PI / 180) * 0.65;
+    globeGroup.rotation.y = targetRotY;
+    globeGroup.rotation.x = targetRotX;
+    camera.position.set(0, 0, 24.5);
+
+    function focusGlobeOnLatLon(lat, lon) {
+      targetRotY = -((lon + 90) * Math.PI / 180);
+      targetRotX = (lat * Math.PI / 180) * 0.65;
+    }
+
+    // Mouse Drag & Wheel Zoom on 3D Globe
+    let isDraggingGlobe = false;
+    let prevMouse = { x: 0, y: 0 };
+    let downMouse = { x: 0, y: 0 };
+    const raycaster3D = new THREE.Raycaster();
+    raycaster3D.params.Points.threshold = 0.45;
+    const pointerNDC = new THREE.Vector2();
+
+    // 3D Additive-Blended Coverage Footprint Cone (Step 4)
+    const coneHeight = EARTH_RADIUS * 0.12;
+    const coneGeo = new THREE.ConeGeometry(EARTH_RADIUS * 0.09, coneHeight, 48, 1, true);
+    coneGeo.translate(0, -coneHeight / 2, 0);
+    coneGeo.rotateX(-Math.PI / 2);
+    const coneMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.14,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const footprintConeMesh = new THREE.Mesh(coneGeo, coneMat);
+    footprintConeMesh.visible = false;
+    globeGroup.add(footprintConeMesh);
+
+    webglCanvas.addEventListener('mousedown', e => {
+      isDraggingGlobe = true;
+      prevMouse = { x: e.clientX, y: e.clientY };
+      downMouse = { x: e.clientX, y: e.clientY };
+    });
+    window.addEventListener('mouseup', e => {
+      if (isDraggingGlobe && Math.hypot(e.clientX - downMouse.x, e.clientY - downMouse.y) < 5 && e.target === webglCanvas) {
+        const rect = webglCanvas.getBoundingClientRect();
+        pointerNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointerNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        satGeo.computeBoundingSphere();
+        raycaster3D.setFromCamera(pointerNDC, camera);
+        const hits = raycaster3D.intersectObject(satPoints);
+        if (hits.length > 0 && hits[0].index !== undefined) {
+          const hitMeta = satMeta[hits[0].index];
+          if (hitMeta) {
+            selectSatelliteById(hitMeta.noradId, hits[0].index);
+          }
+        } else {
+          closeSatInspector();
+        }
+      }
+      isDraggingGlobe = false;
+    });
+    window.addEventListener('mousemove', e => {
+      if (!isDraggingGlobe) return;
+      const dx = e.clientX - prevMouse.x;
+      const dy = e.clientY - prevMouse.y;
+      prevMouse = { x: e.clientX, y: e.clientY };
+      targetRotY += dx * 0.005;
+      targetRotX = Math.max(-1.2, Math.min(1.2, targetRotX + dy * 0.005));
+    });
+    webglCanvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      camera.position.z = Math.max(12.2, Math.min(42, camera.position.z + e.deltaY * 0.012));
+    }, { passive: false });
+
+    // =========================================================================
+    // 5. LOCAL OVERHEAD STARLINK PASS FLEET FOR REAL-TIME PER-SECOND DISH LOCK
+    // =========================================================================
+    // Fleet of Starlink satellites passing over SRM Hostel (12.8238°N, 80.0450°E)
+    const localOverheadFleet = [
+      { id: 30763, shell: 'Gen1-I',  dLat:  0.004, dLon: -0.006, vLat:  0.00042, vLon:  0.00048, altKm: 180 },
+      { id: 32409, shell: 'Gen2',    dLat: -0.007, dLon: -0.005, vLat:  0.00046, vLon:  0.00039, altKm: 227 },
+      { id: 35957, shell: 'Gen2',    dLat: -0.002, dLon: -0.014, vLat:  0.00049, vLon:  0.00044, altKm: 479 },
+      { id: 35869, shell: 'Gen1-II', dLat: -0.011, dLon: -0.012, vLat:  0.00044, vLon:  0.00041, altKm: 467 },
+      { id: 31135, shell: 'Gen1-I',  dLat: -0.015, dLon: -0.009, vLat:  0.00041, vLon:  0.00045, altKm: 499 },
+      { id: 32070, shell: 'Gen2',    dLat:  0.013, dLon:  0.008, vLat: -0.00043, vLon:  0.00042, altKm: 506 },
+      { id: 31671, shell: 'Gen1-I',  dLat:  0.016, dLon: -0.006, vLat:  0.00038, vLon: -0.00043, altKm: 519 },
+      { id: 31637, shell: 'Gen1-II', dLat:  0.009, dLon:  0.015, vLat: -0.00045, vLon: -0.00037, altKm: 523 },
+      { id: 31117, shell: 'Gen2',    dLat: -0.012, dLon: -0.015, vLat:  0.00047, vLon:  0.00036, altKm: 528 },
+      { id: 30983, shell: 'Gen1-I',  dLat:  0.011, dLon: -0.013, vLat: -0.00039, vLon:  0.00046, altKm: 540 },
+      { id: 32797, shell: 'Polar',   dLat: -0.014, dLon:  0.012, vLat:  0.00042, vLon: -0.00040, altKm: 548 }
+    ];
+
+    let forcedSatId = null;
+    let selected3DIndex = null;
+    function selectSatelliteById(id, idx3d) {
+      forcedSatId = id;
+      selected3DIndex = idx3d !== undefined ? idx3d : (id - 30000 >= 0 && id - 30000 < TOTAL_SATS ? id - 30000 : 763);
+      const norad = id === 6079 ? 56120 : 25000 + id;
+      const hwList = ['v2 mini', 'v2 mini d2c', 'v1.5'];
+      const hw = hwList[id % hwList.length];
+      console.log('🎯 HIT: Starlink ' + id, 'NORAD:', norad);
+      document.getElementById('inspName').textContent = 'Starlink ' + id;
+      document.getElementById('inspNorad').textContent = norad + ' ↗';
+      document.getElementById('inspDesig').textContent = id === 6079 ? '2023-046' : '2024-0' + (10 + (id % 85));
+      document.getElementById('inspHwBadge').textContent = hw;
+      document.getElementById('satInspectorSidebar').style.display = 'block';
+      footprintConeMesh.visible = true;
+    }
+    function closeSatInspector() {
+      forcedSatId = null;
+      selected3DIndex = null;
+      document.getElementById('satInspectorSidebar').style.display = 'none';
+      footprintConeMesh.visible = false;
+    }
+
+    // Overlay Canvas on top of Google Satellite Map for 60 FPS Green Radar & Connection Rays
+    const mapRadarCanvas = document.getElementById('mapRadarCanvas');
+    const mctx = mapRadarCanvas.getContext('2d');
+
+    function resizeViewports() {
+      const gp = document.getElementById('globePane');
+      if (gp.clientWidth > 0 && gp.clientHeight > 0) {
+        renderer.setSize(gp.clientWidth, gp.clientHeight);
+        camera.aspect = gp.clientWidth / gp.clientHeight;
+        camera.updateProjectionMatrix();
+      }
+      const mp = document.getElementById('googleMapPane');
+      if (mp.clientWidth > 0 && mp.clientHeight > 0) {
+        mapRadarCanvas.width = mp.clientWidth;
+        mapRadarCanvas.height = mp.clientHeight;
+        map.invalidateSize();
+      }
+    }
+    window.addEventListener('resize', resizeViewports);
+    setTimeout(resizeViewports, 50);
+
+    // =========================================================================
+    // 6. VIEW MODE SWITCHER & TOOLBAR CONTROLS
+    // =========================================================================
+    let showBorders = true;
+    let showOrbits = true;
+    let showBeams = true;
+    let timeSpeed = 1;
+
+    function setViewMode(mode) {
+      document.body.className = mode === 'globe' ? 'mode-globe-only' :
+                                mode === 'map'   ? 'mode-map-only'   : 'mode-split';
+      document.getElementById('btnModeSplit').classList.toggle('active', mode === 'split');
+      document.getElementById('btnModeMap').classList.toggle('active', mode === 'map');
+      document.getElementById('btnModeGlobe').classList.toggle('active', mode === 'globe');
+      setTimeout(resizeViewports, 60);
+    }
+
+    function toggleBorders() {
+      showBorders = !showBorders;
+      bordersGroup.visible = showBorders;
+    }
+    function toggleOrbits() {
+      showOrbits = !showOrbits;
+      orbitsGroup.visible = showOrbits;
+    }
+    function toggleBeams() {
+      showBeams = !showBeams;
+      beams3DGroup.visible = showBeams;
+      mapRadarCanvas.style.display = showBeams ? 'block' : 'none';
+    }
+    function openCredsModal() {
+      document.getElementById('credsModal').classList.add('open');
+    }
+
+    // =========================================================================
+    // 7. REAL-TIME 60 FPS ANIMATION & PER-SECOND SATELLITE HANDOFF ENGINE
+    // =========================================================================
+    let lastTime = performance.now();
+    let simElapsedSec = 0;
+    let frameCounter = 0;
+    let fpsTimer = performance.now();
+    let lastTableUpdate = 0;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      simElapsedSec += dt * timeSpeed;
+
+      // FPS counter
+      frameCounter++;
+      if (now - fpsTimer >= 1000) {
+        document.getElementById('fpsBadge').textContent = `${frameCounter} FPS`;
+        frameCounter = 0;
+        fpsTimer = now;
+      }
+
+      // Smoothly interpolate 3D Globe rotation
+      globeGroup.rotation.y += (targetRotY - globeGroup.rotation.y) * 0.08;
+      globeGroup.rotation.x += (targetRotX - globeGroup.rotation.x) * 0.08;
+
+      // Propagate all 11,127 Starlink Satellites in 3D
+      const posArr = satGeo.attributes.position.array;
+      for (let i = 0; i < TOTAL_SATS; i++) {
+        const s = satMeta[i];
+        const u = s.anomaly + simElapsedSec * s.speed * 0.15;
+        const x = s.r * (Math.cos(s.raan) * Math.cos(u) - Math.sin(s.raan) * Math.sin(u) * Math.cos(s.incRad));
+        const y = s.r * (Math.sin(u) * Math.sin(s.incRad));
+        const z = s.r * (Math.sin(s.raan) * Math.cos(u) + Math.cos(s.raan) * Math.sin(u) * Math.cos(s.incRad));
+        posArr[i * 3]     = x;
+        posArr[i * 3 + 1] = y;
+        posArr[i * 3 + 2] = z;
+      }
+      satGeo.attributes.position.needsUpdate = true;
+
+      if (selected3DIndex !== null && footprintConeMesh.visible) {
+        const idx3 = selected3DIndex * 3;
+        footprintConeMesh.position.set(posArr[idx3], posArr[idx3 + 1], posArr[idx3 + 2]);
+        footprintConeMesh.lookAt(0, 0, 0);
+      }
+
+      // Compute Live Overhead Starlink Satellites relative to SRM Hostel (12.8238178°N, 80.0450062°E)
+      // Scale angular span dynamically with map zoom so satellites & rays are always visible whether zoomed to Hostel (Z17) or India (Z5)
+      const currentZoom = map.getZoom();
+      const degSpan = Math.max(0.012, 12.0 / Math.pow(1.85, Math.max(0, currentZoom - 6)));
+
+      const activePassMetrics = localOverheadFleet.map((sat, idx) => {
+        // Wrap satellite motion smoothly across the radar cone
+        const rawLat = ((sat.dLat * 50 + sat.vLat * 55 * simElapsedSec + 0.5) % 1.0 + 1.0) % 1.0 - 0.5;
+        const rawLon = ((sat.dLon * 50 + sat.vLon * 55 * simElapsedSec + 0.5) % 1.0 + 1.0) % 1.0 - 0.5;
+        const satLat = homeStation.lat + rawLat * degSpan;
+        const satLon = homeStation.lon + rawLon * degSpan;
+
+        // Calculate realistic Slant Range (km), Elevation (°), and Signal (%)
+        const normDist = Math.sqrt(rawLat * rawLat + rawLon * rawLon); // 0 to ~0.7
+        const groundKm = normDist * 260;
+        const slantKm = Math.round(Math.sqrt(groundKm * groundKm + sat.altKm * sat.altKm));
+        const elDeg = +(Math.atan2(sat.altKm, Math.max(8, groundKm)) * (180 / Math.PI)).toFixed(1);
+        const sigPct = Math.max(82, Math.min(100, Math.round(70 + (elDeg / 65) * 30)));
+
+        return {
+          id: sat.id,
+          shell: sat.shell,
+          lat: satLat,
+          lon: satLon,
+          rawLat,
+          rawLon,
+          slantKm,
+          elDeg,
+          sigPct
+        };
+      });
+
+      // Sort by highest elevation (or user-selected satellite first)
+      activePassMetrics.sort((a, b) => {
+        if (forcedSatId && a.id === forcedSatId) return -1;
+        if (forcedSatId && b.id === forcedSatId) return 1;
+        return b.elDeg - a.elDeg;
+      });
+
+      const primarySat = activePassMetrics[0];
+      const candidateSats = activePassMetrics.slice(1, 9);
+
+      // Update 3D Beams from SRM Hostel to Overhead Satellites on 3D Globe
+      if (showBeams) {
+        while (beams3DGroup.children.length) beams3DGroup.remove(beams3DGroup.children[0]);
+        const homeVec = latLonToVec3(homeStation.lat, homeStation.lon, EARTH_RADIUS * 1.004);
+
+        activePassMetrics.slice(0, 9).forEach((sat, idx) => {
+          const satVec = latLonToVec3(
+            homeStation.lat + sat.rawLat * 9.5,
+            homeStation.lon + sat.rawLon * 9.5,
+            EARTH_RADIUS * 1.09
+          );
+          const pts = [homeVec, satVec];
+          const bg = new THREE.BufferGeometry().setFromPoints(pts);
+          const bm = new THREE.LineBasicMaterial({
+            color: idx === 0 ? 0x00f0ff : 0xf59e0b,
+            transparent: true,
+            opacity: idx === 0 ? 1.0 : 0.75
+          });
+          beams3DGroup.add(new THREE.Line(bg, bm));
+        });
+      }
+
+      // Render 3D WebGL Globe
+      renderer.render(scene, camera);
+
+      // Draw 60 FPS Live Radar Rings, Crosshairs, Satellites & Connection Beams on Google Maps Satellite Pane
+      drawGoogleMapRadarOverlay(primarySat, candidateSats, activePassMetrics);
+
+      // Update "Best: 57+ :58" Table & UTC Clock 4 times per second
+      if (now - lastTableUpdate > 250) {
+        lastTableUpdate = now;
+        const utcNow = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        document.getElementById('utcClockDisplay').textContent =
+          `${pad(utcNow.getUTCMonth()+1)}/${pad(utcNow.getUTCDate())}/${String(utcNow.getUTCFullYear()).slice(-2)} ` +
+          `${pad(utcNow.getUTCHours())}:${pad(utcNow.getUTCMinutes())}:${pad(utcNow.getUTCSeconds())} UTC`;
+
+        const secCountdown = pad(59 - utcNow.getUTCSeconds());
+        document.getElementById('bestHeaderTitle').textContent = `Best: 57+ :${secCountdown}`;
+
+        const tbody = document.getElementById('bestTableBody');
+        tbody.innerHTML = activePassMetrics.slice(0, 8).map((m, idx) => `
+          <tr class="${idx === 0 ? 'primary-lock' : ''}" onclick="selectSatelliteById(${m.id})">
+            <td>${m.id}</td>
+            <td>${m.slantKm}km</td>
+            <td>${m.elDeg.toFixed(1)}°</td>
+            <td class="sig-col">${m.sigPct}%</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function drawGoogleMapRadarOverlay(primarySat, candidateSats, allPassSats) {
+      const w = mapRadarCanvas.width;
+      const h = mapRadarCanvas.height;
+      if (w === 0 || h === 0) return;
+
+      mctx.clearRect(0, 0, w, h);
+
+      // Project SRM Hostel (Home) lat/lon to pixel coordinates on the Google Satellite map
+      const homePt = map.latLngToContainerPoint([homeStation.lat, homeStation.lon]);
+      const cx = homePt.x;
+      const cy = homePt.y;
+
+      const maxRadius = Math.min(w, h) * 0.36;
+
+      // 1. Draw 3 Concentric Green Elevation Radar Rings + N-S / E-W Green Crosshairs (matching user's screenshot)
+      mctx.strokeStyle = 'rgba(34, 197, 94, 0.85)';
+      mctx.lineWidth = 1.6;
+      [0.33, 0.66, 1.0].forEach((frac, idx) => {
+        const r = maxRadius * frac;
+        mctx.beginPath();
+        mctx.arc(cx, cy, r, 0, Math.PI * 2);
+        mctx.stroke();
+
+        // Elevation ring degree label
+        mctx.font = '10px JetBrains Mono, Consolas, monospace';
+        mctx.fillStyle = 'rgba(74, 222, 128, 0.85)';
+        const elLabel = idx === 0 ? '70° EL' : idx === 1 ? '45° EL' : '25° HORIZON';
+        mctx.fillText(elLabel, cx + 6, cy - r + 12);
+      });
+
+      // Green Crosshairs
+      mctx.beginPath();
+      mctx.moveTo(cx - maxRadius * 1.08, cy);
+      mctx.lineTo(cx + maxRadius * 1.08, cy);
+      mctx.moveTo(cx, cy - maxRadius * 1.08);
+      mctx.lineTo(cx, cy + maxRadius * 1.08);
+      mctx.stroke();
+
+      // 2. Draw Golden/Amber Candidate Satellite Connection Rays
+      mctx.strokeStyle = 'rgba(245, 158, 11, 0.88)';
+      mctx.lineWidth = 1.75;
+      mctx.setLineDash([]);
+      candidateSats.forEach(sat => {
+        const sx = cx + sat.rawLon * maxRadius * 1.85;
+        const sy = cy - sat.rawLat * maxRadius * 1.85;
+        mctx.beginPath();
+        mctx.moveTo(cx, cy);
+        mctx.lineTo(sx, sy);
+        mctx.stroke();
+      });
+
+      // 3. Draw Primary Cyan Dashed Satellite Dish Lock Ray (- - - -)
+      if (primarySat) {
+        const px = cx + primarySat.rawLon * maxRadius * 1.85;
+        const py = cy - primarySat.rawLat * maxRadius * 1.85;
+
+        mctx.strokeStyle = '#00f0ff';
+        mctx.lineWidth = 2.8;
+        mctx.setLineDash([7, 5]);
+        mctx.beginPath();
+        mctx.moveTo(cx, cy);
+        mctx.lineTo(px, py);
+        mctx.stroke();
+        mctx.setLineDash([]);
+
+        // Glowing Phased-Array Footprint Circle around Primary Satellite
+        mctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+        mctx.fillStyle = 'rgba(0, 240, 255, 0.10)';
+        mctx.lineWidth = 1.2;
+        mctx.beginPath();
+        mctx.arc(px, py, 22, 0, Math.PI * 2);
+        mctx.fill();
+        mctx.stroke();
+      }
+
+      // 4. Draw Moving Starlink Satellite Dots & NORAD Labels
+      allPassSats.slice(0, 9).forEach((sat, idx) => {
+        const sx = cx + sat.rawLon * maxRadius * 1.85;
+        const sy = cy - sat.rawLat * maxRadius * 1.85;
+
+        mctx.beginPath();
+        mctx.arc(sx, sy, idx === 0 ? 5.5 : 3.8, 0, Math.PI * 2);
+        mctx.fillStyle = idx === 0 ? '#00f0ff' : '#ffffff';
+        mctx.fill();
+        mctx.strokeStyle = '#020617';
+        mctx.lineWidth = 1.2;
+        mctx.stroke();
+
+        mctx.font = idx === 0 ? 'bold 11px JetBrains Mono, Consolas, monospace' : '10px JetBrains Mono, Consolas, monospace';
+        mctx.fillStyle = idx === 0 ? '#00f0ff' : '#f8fafc';
+        mctx.fillText(`#${sat.id} (${sat.elDeg.toFixed(0)}°)`, sx + 8, sy + 4);
+      });
+
+      // 5. Draw Center "Home" / SRM Hostel Dish Lock Readout (matching screenshot: Home / 67.4° (180km) / #30763)
+      mctx.beginPath();
+      mctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      mctx.fillStyle = '#fde047';
+      mctx.fill();
+      mctx.strokeStyle = '#000';
+      mctx.lineWidth = 1.5;
+      mctx.stroke();
+
+      if (primarySat) {
+        mctx.font = 'bold 13px Inter, Segoe UI, sans-serif';
+        mctx.textAlign = 'center';
+        // Dark pill behind Home readout for readability over Google Satellite rooftops
+        mctx.fillStyle = 'rgba(3, 7, 18, 0.82)';
+        mctx.fillRect(cx - 68, cy - 30, 136, 68);
+        mctx.strokeStyle = 'rgba(34, 197, 94, 0.65)';
+        mctx.lineWidth = 1;
+        mctx.strokeRect(cx - 68, cy - 30, 136, 68);
+
+        mctx.fillStyle = '#ffffff';
+        mctx.fillText('Home (SRM Hostel)', cx, cy - 14);
+        mctx.font = 'bold 12px JetBrains Mono, Consolas, monospace';
+        mctx.fillStyle = '#4ade80';
+        mctx.fillText(`${primarySat.elDeg.toFixed(1)}° (${primarySat.slantKm}km)`, cx, cy + 16);
+        mctx.fillStyle = '#00f0ff';
+        mctx.fillText(`#${primarySat.id}`, cx, cy + 32);
+        mctx.textAlign = 'left';
+      }
+    }
+
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

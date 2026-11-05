@@ -2,11 +2,23 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-00f0ff.svg)](./LICENSE)
 [![Author: mr elonikhil](https://img.shields.io/badge/Author-mr%20elonikhil-22c55e.svg)](https://github.com/batturamesh7771-sketch)
+[![Live WebGL Simulation: Online](https://img.shields.io/badge/Live_Simulation-ONLINE_TEST_RUN-brightgreen.svg?logo=googlechrome&logoColor=white)](https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/)
 [![Satellites: 11,127+ Active](https://img.shields.io/badge/Starlink_Constellation-11,127_Satellites-f97316.svg)](#)
 [![API Vault: 10,043 Rotating Keys](https://img.shields.io/badge/API_Key_Vault-10,043_Keys_Active-38bdf8.svg)](#)
 [![mTLS: secp384r1 SHA384](https://img.shields.io/badge/SpaceX_mTLS-secp384r1_ECDSA-a855f7.svg)](#)
 
-> **Project 09** is a complete A–Z real-time 3D orbital mechanics, SpaceX Starlink constellation, and multi-messenger space simulation platform. It combines a **6-Phase Full-Stack TypeScript Monorepo (`@cosmos/api`, `@cosmos/web`, `@cosmos/orbital`, `@cosmos/types`)**, a **Zero-Install Standalone 3D WebGL + Google Maps Satellite Hybrid Simulator (`cosmos-webgl-simulator.html`)**, a **React Three Fiber `InstancedMesh` Raycasting & Slide-Out Telemetry Engine**, a **Manifest V3 Chrome Extension**, **SpaceX Enterprise `secp384r1` ECDSA mTLS Credentials**, and a **10,000+ Rotating API Key Vault** spanning 43 space and geospatial data providers.
+---
+
+### 🚀 **[CLICK HERE TO TEST RUN LIVE 3D WEBGL SIMULATION](https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/)**
+> 🔗 **Permanent Live WebGL Simulation Link:**  
+> **[https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/](https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/)**  
+>  
+> ⚡ *Instant test run in any browser on any laptop, desktop, tablet, or phone — zero installation or setup required!*  
+> Includes all **11,127 Starlink satellites**, real-time **SRM Hostel Live Ground Station Radar (`12.8238° N, 80.0450° E`)**, per-second dish handoffs (`Best: 57+`), 3D raycasting satellite selector, slide-out telemetry HUD, and Google Maps Satellite Hybrid layers.
+
+---
+
+> **Project 09** is a complete A–Z real-time 3D orbital mechanics, SpaceX Starlink constellation, and multi-messenger space simulation platform. It combines a **6-Phase Full-Stack TypeScript Monorepo (`@cosmos/api`, `@cosmos/web`, `@cosmos/orbital`, `@cosmos/types`)**, a **Zero-Install Standalone 3D WebGL + Google Maps Satellite Hybrid Simulator (`cosmos-webgl-simulator.html` / `index.html`)**, a **React Three Fiber `InstancedMesh` Raycasting & Slide-Out Telemetry Engine**, a **Manifest V3 Chrome Extension**, **SpaceX Enterprise `secp384r1` ECDSA mTLS Credentials**, and a **10,000+ Rotating API Key Vault** spanning 43 space and geospatial data providers.
 
 ---
 
@@ -38,8 +50,10 @@
 
 ```text
 PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/
+├── index.html                               # 🚀 Permanent Live 3D WebGL Simulation Software (GitHub Pages Entrypoint)
 ├── cosmos-webgl-simulator.html              # 🚀 Standalone 3D WebGL Globe + Live Google Satellite SRM Hostel Radar
 ├── starlink-constellation-webgl.html        # 🚀 Standalone 11,127-Satellite Starlink 3D WebGL Simulator
+├── .nojekyll                                # ⚡ Direct static WebGL asset bypass for GitHub Pages
 ├── Project-09-COSMOS-Starlink-Complete.zip  # 📦 Self-contained A–Z Portable ZIP Archive
 ├── certs/                                   # 🔐 SpaceX Starlink Enterprise ECDSA secp384r1 mTLS Credentials
 │   ├── secp384r1.pem                        # NIST P-384 (OID 1.3.132.0.34) EC Parameters
@@ -117,8 +131,12 @@ PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/
 
 ## ⚡ Quick Start
 
-### 1. Run Standalone 3D WebGL & Google Satellite Simulator (Zero Install)
-Simply open **[`cosmos-webgl-simulator.html`](./cosmos-webgl-simulator.html)** or **[`starlink-constellation-webgl.html`](./starlink-constellation-webgl.html)** in Chrome or Edge.
+### 1. Test Run Live Online in Any Browser (Permanent Link — No Install)
+Open the official permanent GitHub Pages link on any laptop, desktop, or mobile device:  
+👉 **[https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/](https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/)**
+
+### 2. Run Standalone Offline 3D WebGL & Google Satellite Simulator (Zero Install)
+Simply open **[`index.html`](./index.html)**, **[`cosmos-webgl-simulator.html`](./cosmos-webgl-simulator.html)**, or **[`starlink-constellation-webgl.html`](./starlink-constellation-webgl.html)** directly in Chrome, Edge, or Firefox.
 
 ### 2. Run Automated Verification Tests
 ```bash

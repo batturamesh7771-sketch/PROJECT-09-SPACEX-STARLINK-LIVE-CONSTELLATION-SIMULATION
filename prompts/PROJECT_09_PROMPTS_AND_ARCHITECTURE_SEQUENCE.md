@@ -2,6 +2,7 @@
 
 **Author:** Mr ELONIKHIL (`mr elonikhil`)  
 **License:** MIT License  
+**Permanent Live WebGL Simulation Link:** [https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/](https://batturamesh7771-sketch.github.io/PROJECT-09-SPACEX-STARLINK-LIVE-CONSTELLATION-SIMULATION/)  
 
 ---
 
